@@ -1,0 +1,22 @@
+services:
+  # Source of truth for forks, forkers, PRs, and widget configs
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: spoon
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume so data survives container restarts
+      - pgdata:/var/lib/postgresql/data
+
+  # Cache and job queue
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

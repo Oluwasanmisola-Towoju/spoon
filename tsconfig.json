@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    // Compile to modern JavaScript; Node 20 supports everything in ES2022
+    "target": "ES2022",
+
+    // NodeNext matches how Node actually resolves ES modules.
+    // The catch: relative imports in our code must end in ".js"
+    // even though the source file is .ts.
+    // TypeScript doesn't rewrite import paths, so we write the final name.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "rootDir": "src",
+    "outDir": "dist",
+
+    // Strict mode turns on the checks that actually catch bugs
+    "strict": true,
+
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}
