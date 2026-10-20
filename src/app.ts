@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { env } from "./config/env.js";
+import widgetRoutes from './routes/widget.js';
 import healthRoutes from './routes/health.js';
 import { request } from 'node:http';
 
@@ -38,6 +39,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // register routes for attaching plugins
     await app.register(healthRoutes);
+    await app.register(widgetRoutes);
 
     return app;
 }
