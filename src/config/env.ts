@@ -7,7 +7,8 @@ const envSchema = z.object({
     HOST: z.string().default("0.0.0.0"),
     LOG_LEVEL: z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
-        .default("info")
+        .default("info"),
+        DATABASE_URL: z.string().url().default("postgres://spoon:spoon@localhost:5432/spoon"),
 });
 
 // used safeParse to return a result object instead of throwing, which lets us print a friendly error before exiting
