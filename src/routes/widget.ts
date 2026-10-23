@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { getMockWidgetData } from "../services/mock-data.js";
+import { getWidgetData } from "../services/widget-data.js";
 import { renderWidget } from "../services/svg-renderer.js";
 
 // follow GH repo and username patterns
@@ -37,13 +37,18 @@ const widgetRoutes: FastifyPluginAsync = async (app) => {
             }
 
             // get data, then render
-            const data = getMockWidgetData(params.data.owner, params.data.repo);
+            const data = await getWidgetData(app.db, params.data.owner, params.data.repo);
+
+            if (!data) {
+                return reply.status(404).send({ error: "Repository not tracked by Spoon" });
+            }
+
             const svg = renderWidget(data, query.data.theme);
 
             return reply
                 .type("image/svg+xml; charset=utf-8") // makes GH & browsers treat it as an image
                 .header("Cache-control", "public, max-age=300, s-maxage=1800") // caching to prevent from heavy Traffic
-                .header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'") // forbid scripts and external loads
+                .header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; font-src data:") // forbid scripts and external loads, embedds font as data
                 .header("X-Content-Type-Options", "nosniff")  // stops browser from guessing a different type
                 .send(svg);
         }
