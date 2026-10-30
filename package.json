@@ -8,7 +8,8 @@
     "start": "tsx src/server.ts",
     "test": "vitest run",
     "db:migrate": "tsx --env-file=.env scripts/db.ts migrate",
-    "db:seed": "tsx --env-file=.env scripts/db.ts seed"
+    "db:seed": "tsx --env-file=.env scripts/db.ts seed",
+    "sync": "tsx --env-file=.env scripts/sync.ts"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,7 @@
   "type": "module",
   "dependencies": {
     "@fontsource/sniglet": "^5.3.0",
+    "@octokit/rest": "^22.0.1",
     "fastify": "^5.12.7",
     "fastify-plugin": "^6.0.1",
     "pg": "^8.23.1",
