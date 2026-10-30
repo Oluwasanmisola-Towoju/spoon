@@ -9,6 +9,10 @@ const envSchema = z.object({
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
         .default("info"),
         DATABASE_URL: z.string().url().default("postgres://spoon:spoon@localhost:5432/spoon"),
+        GITHUB_TOKEN: z
+            .string()
+            .optional()
+            .transform((value) => value || undefined)
 });
 
 // used safeParse to return a result object instead of throwing, which lets us print a friendly error before exiting
