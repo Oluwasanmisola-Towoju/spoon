@@ -4,7 +4,10 @@ export async function seed(pool: pg.Pool): Promise<void> {
     const repo = await pool.query<{ id: string }>(
         `INSERT INTO repositories (github_id, owner, name)
         VALUES (1000, 'octocat', 'hello-world')
-        ON CONFLICT (github_id) DO UPDATE SET updated_at = now()
+        ON CONFLICT (github_id) DO UPDATE SET
+            owner = EXCLUDED.owner,
+            name = EXCLUDED.name,
+            updated_at = now()
         RETURNING id `
     );
     const repoId = repo.rows[0].id;
