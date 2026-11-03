@@ -10,8 +10,8 @@ export async function getWidgetData(
     repo: string
 ): Promise<WidgetData | null> {
     // find the repo, using lower() matches index from migration, lookups become case-insensitive and fast
-    const repoResult = await db.query<{ id: string; owner: string; name: string }>(
-        `SELECT id, owner, name FROM repositories
+    const repoResult = await db.query<{ id: string; owner: string; name: string; forks_count: number | null }>(
+        `SELECT id, owner, name, forks_count FROM repositories
         WHERE lower(owner) = lower($1) AND lower(name) = lower($2)`,
         [owner, repo]
     );
@@ -41,7 +41,7 @@ export async function getWidgetData(
     return {
         owner: found.owner,
         repo: found.name,
-        forkCount: Number(forkCount.rows[0].n),
+        forkCount: found.forks_count ?? Number(forkCount.rows[0].n),
         mergedPrTotal: Number(mergedCount.rows[0].n),
         topForkers: top.rows.map((r) => ({ login: r.login, mergedPrCount: Number(r.merged) }))
     };
