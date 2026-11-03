@@ -9,7 +9,8 @@
     "test": "vitest run",
     "db:migrate": "tsx --env-file=.env scripts/db.ts migrate",
     "db:seed": "tsx --env-file=.env scripts/db.ts seed",
-    "sync": "tsx --env-file=.env scripts/sync.ts"
+    "sync": "tsx --env-file=.env scripts/sync.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

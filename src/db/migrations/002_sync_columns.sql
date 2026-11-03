@@ -2,4 +2,4 @@
 ALTER TABLE repositories ADD COLUMN forks_count INTEGER;
 
 -- when last pulled fresh data
-ALTER TABLLE repositories ADD COLUMN last_synced_at TIMESTAMPTZ;
+ALTER TABLE repositories ADD COLUMN last_synced_at TIMESTAMPTZ;
