@@ -148,6 +148,7 @@ export function createGitHubClient(octokit: Octokit, maxPages = DEFAULT_MAX_PAGE
                             state: pr.merged_at ? "merged" : pr.state === "open" ? "open" : "closed",
                             mergedAt: pr.merged_at,
                             createdAt: pr.created_at,
+                            updatedAt: pr.updated_at,
                             author
                         });
                     }
