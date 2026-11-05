@@ -24,6 +24,7 @@ export interface GitHubPullRequest {
     state: "open" | "closed" | "merged";
     mergedAt: string | null;
     createdAt: string;
+    updatedAt: string;
     author: GitHubUser;
 }
 
