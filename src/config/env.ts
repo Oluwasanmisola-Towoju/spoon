@@ -8,11 +8,19 @@ const envSchema = z.object({
     LOG_LEVEL: z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
         .default("info"),
-        DATABASE_URL: z.string().url().default("postgres://spoon:spoon@localhost:5432/spoon"),
-        GITHUB_TOKEN: z
-            .string()
-            .optional()
-            .transform((value) => value || undefined)
+    DATABASE_URL: z.string().url().default("postgres://spoon:spoon@localhost:5432/spoon"),
+    GITHUB_TOKEN: z
+        .string()
+        .optional()
+        .transform((value) => value || undefined),
+    REDIS_URL: z.string().url(),
+    GITHUB_WEBHOOK_SECRET: z
+        .string()
+        .optional()
+        .transform((value) => value || undefined)
+        .refine((value) => value === undefined || value.length >= 16, {
+            message: "must be at least 16 characters (use a long random string)",
+        }),
 });
 
 // used safeParse to return a result object instead of throwing, which lets us print a friendly error before exiting
