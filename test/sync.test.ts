@@ -39,6 +39,7 @@ const pullRequest = (n: number, by: number, state: GitHubPullRequest["state"]): 
   state,
   mergedAt: state === "merged" ? "2026-03-01T00:00:00Z" : null,
   createdAt: "2026-02-01T00:00:00Z",
+  updatedAt: state === "merged" ? "2026-03-01T00:00:00Z" : "2026-02-01T00:00:00Z",
   author: person(by, `forker${by}`),
 });
 
