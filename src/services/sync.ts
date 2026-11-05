@@ -1,5 +1,6 @@
 import type pg from "pg";
 import type { GitHubClient, GitHubUser } from "../types/github.js";
+import { upsertRepository } from "./store.js";
 
 export interface SyncSummary {
     repository: string;
@@ -41,31 +42,13 @@ export async function syncRepository(
     try {
         await client.query("BEGIN");
 
-        // if a repo alrefy holds this owner/name, the unique name index would reject the insert
-        // the name now belongs to the GH repo we just fetched, so the stale row goes. ON DELETE CASCADE remoevs its children
-        await client.query(
-            `DELETE FROM repositories
-            WHERE lower(owner) = lower($1) AND lower(name) = lower($2) AND github_id <> $3`,
-            [repoInfo.owner, repoInfo.name, repoInfo.id]
-        );
+        // repo upsert lives in store.ts now, sice webhook handlers need the exact same logic
+        const repositoryId = await upsertRepository(client, repoInfo);
 
-        // upsert the repo itself
-        const repoRow = await client.query<{ id: string }>(
-            `INSERT INTO repositories (github_id, owner, name, forks_count, last_synced_at)
-            VALUES ($1, $2, $3, $4, now())
-            ON CONFLICT (github_id) DO UPDATE SET
-                owner = EXCLUDED.owner,
-                name = EXCLUDED.name,
-                forks_count = EXCLUDED.forks_count,
-                last_synced_at = now(),
-                updated_at = now()
-            RETURNING id`,
-            [repoInfo.id, repoInfo.owner, repoInfo.name, repoInfo.forksCount]
-        );
-        const repositoryId = repoRow.rows[0].id;
+        // only a full sync marks the repo as freshly synced, webhook events only know aboout 1 fork or 1 PR
+        await client.query("UPDATE repositories SET last_synced_at = now() WHERE id = $1", [repositoryId]);
 
-        // upsert all people in 1 statement, unnest() turns parallel arrays into rows
-        // so 500 people cost one round trip instead of 500
+        // upsert all people in 1 statement with unnest()
         const list = [...people.values()];
         const forkerRows = list.length
             ? await client.query<{ id: string; github_id: string }>(
@@ -75,21 +58,18 @@ export async function syncRepository(
                     login = EXCLUDED.login,
                     avatar_url = EXCLUDED.avatar_url
                 RETURNING id, github_id`,
-                [
-                    list.map((p) => p.id),
-                    list.map((p) => p.login),
-                    list.map((p) => p.avatarUrl)
-                ]
-            )
-            : { rows: [] }; 
+                [list.map((p) => p.id), list.map((p) => p.login), list.map((p) => p.avatarUrl)]
+                )
+            : { rows: [] };
         
-        // returning gave us internal IDs; now map GH id -> internal ID for the next upserts
-        // both come back as strings(BIGINT), so we use strings as the map key type to avoid JS number precision issues
-        const forkerIdGitHubId = new Map<string, string>();
+        // returning gave us internal ids, map GH id -> internal id
+        // both came back as strings(BIGINT) so we use strings as keys
+        const forkerIdByGithubId = new Map<string, string>();
         for (const row of forkerRows.rows) {
-            forkerIdGitHubId.set(row.github_id, row.id);
+            forkerIdByGithubId.set(row.github_id, row.id);
         }
-        const internalId = (user: GitHubUser) => forkerIdGitHubId.get(String(user.id))!;
+        const internalId = (user: GitHubUser) => forkerIdByGithubId.get(String(user.id));
+
 
         if (forks.items.length) {
             await client.query(
@@ -97,43 +77,47 @@ export async function syncRepository(
                 SELECT f.github_id, $1::bigint, f.forker_id
                 FROM unnest($2::bigint[], $3::bigint[]) AS f(github_id, forker_id)
                 ON CONFLICT (github_id) DO UPDATE SET
-                    repository_id = EXCLUDED.repository_id,
-                    forker_id = EXCLUDED.forker_id`,
+                repository_id = EXCLUDED.repository_id,
+                forker_id = EXCLUDED.forker_id`,
                 [repositoryId, forks.items.map((f) => f.id), forks.items.map((f) => internalId(f.owner))]
             );
         }
 
         if (prs.items.length) {
-            // on conflict, refresh title/state/merged_at since a PR's life is: open -> merged
+            // on conflict we refresh title/state/merged_at since a pr can only be open -> merged
             await client.query(
                 `INSERT INTO pull_requests
-                    (github_id, repository_id, forker_id, number, title, state, merged_at, created_at)
-                SELECT p.github_id, $1::bigint, p.forker_id, p.number, p.title, p.state, p.merged_at, p.created_at
+                (github_id, repository_id, forker_id, number, title, state, merged_at, created_at, source_updated_at)
+                SELECT p.github_id, $1::bigint, p.forker_id, p.number, p.title, p.state, p.merged_at, p.created_at, p.updated_at
                 FROM unnest(
-                    $2::bigint[], $3::bigint[], $4::int[], $5::text[], $6::text[], $7::timestamptz[], $8::timestamptz[]    
-                ) AS p(github_id, forker_id, number, title, state, merged_at, created_at)
+                $2::bigint[], $3::bigint[], $4::int[], $5::text[], $6::text[], $7::timestamptz[], $8::timestamptz[], $9::timestamptz[]
+                ) AS p(github_id, forker_id, number, title, state, merged_at, created_at, updated_at)
                 ON CONFLICT (github_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    state = EXCLUDED.state,
-                    merged_at = EXCLUDED.merged_at`,
+                title = EXCLUDED.title,
+                state = EXCLUDED.state,
+                merged_at = EXCLUDED.merged_at,
+                source_updated_at = EXCLUDED.source_updated_at
+                -- webhooks may have delivered something newer than this sync saw.
+                -- never let older data overwrite newer data.
+                WHERE pull_requests.source_updated_at IS NULL
+                    OR EXCLUDED.source_updated_at >= pull_requests.source_updated_at`,
                 [
-                    repositoryId,
-                    prs.items.map((p) => p.id),
-                    prs.items.map((p) => internalId(p.author)),
-                    prs.items.map((p) => p.number),
-                    prs.items.map((p) => p.title),
-                    prs.items.map((p) => p.state),
-                    prs.items.map((p) => p.mergedAt),
-                    prs.items.map((p) => p.createdAt)
+                repositoryId,
+                prs.items.map((p) => p.id),
+                prs.items.map((p) => internalId(p.author)),
+                prs.items.map((p) => p.number),
+                prs.items.map((p) => p.title),
+                prs.items.map((p) => p.state),
+                prs.items.map((p) => p.mergedAt),
+                prs.items.map((p) => p.createdAt),
+                prs.items.map((p) => p.updatedAt),
                 ]
             );
         }
 
-        // forks that vanished on GH should vanish here as well
         if (forks.complete) {
             await client.query(
-                `DELETE FROM forks
-                WHERE repository_id = $1 AND github_id <> ALL($2::bigint[])`,
+                `DELETE FROM forks WHERE repository_id = $1 AND github_id <> ALL($2::bigint[])`,
                 [repositoryId, forks.items.map((f) => f.id)]
             );
         }
